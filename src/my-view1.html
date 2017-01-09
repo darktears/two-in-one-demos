@@ -1,0 +1,288 @@
+<!--
+@license
+Copyright (c) 2016 The Polymer Project Authors. All rights reserved.
+This code may only be used under the BSD style license found at http://polymer.github.io/LICENSE.txt
+The complete set of authors may be found at http://polymer.github.io/AUTHORS.txt
+The complete set of contributors may be found at http://polymer.github.io/CONTRIBUTORS.txt
+Code distributed by Google as part of the polymer project is also
+subject to an additional IP rights grant found at http://polymer.github.io/PATENTS.txt
+-->
+
+<link rel="import" href="../bower_components/polymer/polymer.html">
+<link rel="import" href="../bower_components/paper-button/paper-button.html">
+<link rel="import" href="../bower_components/paper-dialog/paper-dialog.html">
+<link rel="import" href="../bower_components/iron-flex-layout/iron-flex-layout.html">
+<link rel="import" href="shared-styles.html">
+
+<dom-module id="my-view1">
+  <template>
+    <style include="shared-styles">
+      :host {
+        display: block;
+        padding: 10px;
+      }
+      .background {
+        background-image: url("../images/blue.png");
+        background-repeat: repeat;
+        width: 100%;
+        height: 90vh;
+      }
+      .hidden {
+        display: none;
+      }
+      .opaque {
+        opacity: 0.5;
+      }
+      .full {
+        height: 90vh;
+      }
+      .dialogButtons {
+        @apply(--layout-horizontal);
+        @apply(--layout-center);
+      }
+      .flex {
+        @apply(--layout-flex);
+      }
+    </style>
+    <div class="card full" id="card">
+      <canvas id="canvas" class="background opaque"></canvas>
+      <paper-dialog id="dialog">
+        <h2 id="title">Welcome to Space Explorer!</h2>
+        <div class="dialogButtons">
+          <div class="flex"></div>
+          <paper-button id="playButton" raised on-tap="startGame">Play</paper-button>
+          <paper-button id="resumeButton" raised on-tap="resumeGame" class="hidden">Resume</paper-button>
+          <paper-button id="restartButton" raised on-tap="startGame" class="hidden">Restart</paper-button>
+          <div class="flex"></div>
+        </div>
+      </paper-dialog>
+      <paper-dialog id="lostDialog">
+        <h2 id="lostDialogTitle">You lost! Your time : {{currentTime}}s</h2>
+        <div class="dialogButtons">
+          <div class="flex"></div>
+          <paper-button id="playButton2" raised on-tap="startGame">Play Again</paper-button>
+          <div class="flex"></div>
+        </div>
+      </paper-dialog>
+      <img id="ship" src="../images/playerShip1_red.png" class="hidden"></img>
+      <img id="explosion" src="../images/explosion5.png" class="hidden"></img>
+      <img id="meteor" src="../images/meteorBrown_big4.png" class="hidden"></img>
+    </div>
+  </template>
+
+  <script>
+    Polymer({
+      is: 'my-view1',
+      shipY: {
+        type: Number
+      },
+      shipX: {
+        type: Number
+      },
+      timeY: {
+        type: Number
+      },
+      timeX: {
+        type: Number
+      },
+      shipSize: {
+        type: Number
+      },
+      meteorSize: {
+        type: Number
+      },
+      timeSize: {
+        type: Number
+      },
+      currentTime: {
+        type: Number
+      },
+      startTime: {
+        type: Number
+      },
+      velocity: {
+        type: Number
+      },
+      context: {
+        type: Object
+      },
+      paused: {
+        type: Boolean
+      },
+      ready: function() {
+        this.shipSize = 80;
+        this.meteorSize = 80;
+        console.log('ready');
+        this.$.dialog.fitInto = this.$.card;
+        this.$.lostDialog.fitInto = this.$.card;
+        this.$.dialog.toggle();
+      },
+      meteors: {
+        type: Array,
+      },
+      startGame: function() {
+        console.log('startGame')
+        this.paused = false;
+        this.dead = false;
+        this.$.canvas.classList.remove('opaque')
+        this.$.playButton.classList.add('hidden')
+        this.$.dialog.close();
+        this.$.lostDialog.close();
+        this.context = this.$.canvas.getContext('2d');
+        let computedStyle = getComputedStyle(this.$.card);
+        // FIXME : Handle resize here.
+        this.context.canvas.width  = parseInt(computedStyle.width);
+        this.context.canvas.height = parseInt(computedStyle.height);
+        this.shipX = this.context.canvas.width / 2 - this.shipSize / 2;
+        this.shipY = this.context.canvas.height - this.shipSize;
+        this.context.font = '20px serif';
+        this.context.fillStyle = '#fbc02d';
+        this.timeSize = this.context.measureText('Elapsed Time : 22222s').width;
+        this.timeX = this.context.canvas.width - this.timeSize;
+        this.timeY = 30;
+        this.currentTime = 0;
+        this.velocity = 1;
+        this.startTime = Math.round(window.performance.now() / 1000);
+        this.meteors = [
+          [0, 0],
+          [this.context.canvas.width / 2, -130],
+          [this.context.canvas.width - 80, -250]
+        ];
+        this.drawSpaceShip();
+        this.drawTime();
+        document.addEventListener('keydown', (event) => {
+          const keyName = event.key;
+          if (event.keyCode == 37) { // Left 
+            this.moveShipLeft();
+          } else if (event.keyCode == 39) { // Right
+            this.moveShipRight();
+          } else if (event.keyCode == 32) { // space
+            this.pauseGame();
+          }
+        }, false);
+        this.requestNewFrame();
+      },
+      pauseGame: function() {
+        if (this.paused)
+          return;
+        this.paused = true;
+        this.$.dialog.toggle();
+        this.$.playButton.classList.add('hidden');
+        this.$.resumeButton.classList.remove('hidden');
+        this.$.restartButton.classList.remove('hidden');
+      },
+      resumeGame: function() {
+        if (this.paused == false)
+          return;
+        this.paused = false;
+        this.$.dialog.close();
+        this.$.playButton.classList.add('hidden');
+        this.$.resumeButton.classList.add('hidden');
+        this.$.restartButton.classList.add('hidden');
+        this.requestNewFrame();
+      },
+      lostGame: function() {
+        if (this.paused == true)
+          return;
+        this.paused = true;
+        this.dead = true;
+        this.showLostScreen();
+      },
+      showLostScreen: function() {
+        this.$.lostDialog.toggle();
+      },
+      drawSpaceShip: function() {
+        if (this.dead)
+          this.context.drawImage(this.$.explosion, this.shipX, this.shipY, this.shipSize + 10, this.shipSize + 10);
+        else
+          this.context.drawImage(this.$.ship, this.shipX, this.shipY, this.shipSize, this.shipSize);
+      },
+      drawTime: function() {
+        var elapsedText = 'Elapsed Time : ' + this.currentTime + 's';
+        this.context.font = '20px serif';
+        this.context.fillStyle = '#fbc02d';
+        // Clear a bit more otherwise we get artifacts.
+        this.context.clearRect(this.timeX, this.timeY - 20, this.timeSize, 20);
+        this.context.fillText(elapsedText, this.timeX, this.timeY);
+      },
+      drawMeteors: function() {
+        for (let value of this.meteors) {
+          //console.log('Meteor : ' + value[0] + ' ' + value[1]);
+          this.context.clearRect(value[0], value[1], this.meteorSize, this.meteorSize);
+          value[1] += this.velocity;
+          if (value[1] + this.meteorSize >= this.context.canvas.height - this.shipSize)
+              this.checkCollision(value);
+          this.context.drawImage(this.$.meteor, value[0], value[1], this.meteorSize, this.meteorSize);
+        }
+      },
+      checkCollision: function(meteor) {
+        var overlap =   meteor[0] + this.meteorSize >= this.shipX && 
+                        meteor[0] <= this.shipX + this.shipSize && 
+                        meteor[1] + this.meteorSize >= this.shipY && 
+                        meteor[1] <= this.shipY + this.shipSize
+         if (overlap == true)
+            this.lostGame();
+      },
+      updateMeteors: function() {
+        let newMeteorSeconds = (5 - this.velocity) <= 0 ? 1 : (5 - this.velocity);
+        if (this.currentTime % newMeteorSeconds  == 0) {
+          let x = this.getRandomInt(0, this.context.canvas.width / 2 - this.meteorSize);
+          this.meteors.push([x, 0]);
+          let x1 = this.getRandomInt(x + this.meteorSize, this.context.canvas.width / 2 - this.meteorSize);
+          this.meteors.push([x1, -this.getRandomInt(250, 300)]);
+          let x2 = this.getRandomInt(x1 + this.meteorSize, this.context.canvas.width - this.meteorSize);
+          this.meteors.push([x2, 0]);
+          let x3 = this.getRandomInt(x2 + this.meteorSize, this.context.canvas.width - this.meteorSize);
+          this.meteors.push([x3, -this.getRandomInt(250, 300)]);
+        }
+        // Get rid of out of bounds meteors
+        for (let i = this.meteors.length; i--; ) {
+          let value = this.meteors[i];
+          if (value[1] > this.context.canvas.height) {
+            this.meteors.splice(i, 1);
+            //console.log("meteor removed")
+          }
+        }
+        if (this.currentTime % 30 == 0)
+          this.velocity++;
+      },
+      moveShipLeft: function() {
+         if (this.shipX <= 10 && this.paused)
+            return;
+         this.context.clearRect(this.shipX, this.shipY, this.shipSize, this.shipSize);
+         this.shipX -= 10;
+         this.drawSpaceShip();
+      },
+      moveShipRight: function() {
+        if (this.shipX + 10 >= this.context.canvas.width - this.shipSize && this.paused)
+            return;
+         this.context.clearRect(this.shipX, this.shipY, this.shipSize, this.shipSize);
+         this.shipX += 10;
+         this.drawSpaceShip();
+      },
+      requestNewFrame: function() {
+        requestAnimationFrame(function() {
+            this.animate();
+          }.bind(this));
+      },
+      animate: function() {
+        if (this.paused)
+          return;
+        var newTime =  Math.round(window.performance.now() / 1000) - this.startTime;
+        this.drawMeteors();
+        this.drawSpaceShip();
+        this.drawTime();
+        if (this.currentTime == newTime) {
+          this.requestNewFrame();
+          return;
+        }
+        this.currentTime = newTime;
+        this.updateMeteors();
+        this.requestNewFrame();
+      },
+      getRandomInt: function(min, max) {
+        return Math.floor(Math.random() * (max - min + 1)) + min;
+      }
+    });
+  </script>
+</dom-module>
