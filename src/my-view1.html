@@ -43,10 +43,30 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
       .flex {
         @apply(--layout-flex);
       }
+      #left {
+        width: 90px;
+        height: 90px;
+        background-repeat: no-repeat;
+        position:absolute;
+        left: 60px;
+        bottom: 10px;
+      }
+      #right {
+        width: 90px;
+        height: 90px;
+        background-repeat: no-repeat;
+        position:absolute;
+        right: 60px;
+        bottom: 10px;
+      }
+      .touchControl {
+        width: 90px;
+        height: 90px;
+      }
     </style>
     <div class="card full" id="card">
       <canvas id="canvas" class="background opaque"></canvas>
-      <paper-dialog id="dialog">
+      <paper-dialog id="dialog" no-cancel-on-outside-click no-cancel-on-esc-key>
         <h2 id="title">Welcome to Space Explorer!</h2>
         <div class="dialogButtons">
           <div class="flex"></div>
@@ -56,7 +76,7 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
           <div class="flex"></div>
         </div>
       </paper-dialog>
-      <paper-dialog id="lostDialog">
+      <paper-dialog id="lostDialog" no-cancel-on-outside-click no-cancel-on-esc-key>
         <h2 id="lostDialogTitle">You lost! Your time : {{currentTime}}s</h2>
         <div class="dialogButtons">
           <div class="flex"></div>
@@ -67,6 +87,12 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
       <img id="ship" src="../images/playerShip1_red.png" class="hidden"></img>
       <img id="explosion" src="../images/explosion5.png" class="hidden"></img>
       <img id="meteor" src="../images/meteorBrown_big4.png" class="hidden"></img>
+    </div>
+    <div id="left" on-down="moveShipLeft" class="hidden">
+      <img src="../images/arrow-92-512.png" class="touchControl"></img>
+    </div>
+    <div id="right" on-down="moveShipRight" class="hidden">
+      <img src="../images/arrow-28-512.png" class="touchControl"></img>
     </div>
   </template>
 
@@ -116,6 +142,24 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
         this.$.dialog.fitInto = this.$.card;
         this.$.lostDialog.fitInto = this.$.card;
         this.$.dialog.toggle();
+        if (typeof(DetachableDock) != 'undefined') {
+          let sensor = new DetachableDock();
+          sensor.start();
+          sensor.onchange = function() {
+            console.log("Dock status changed");
+            this.toggleTouch(sensor.reading.attached);
+          }.bind(this);
+        }
+        document.addEventListener('keydown', (event) => {
+          const keyName = event.key;
+          if (event.keyCode == 37) { // Left 
+            this.moveShipLeft();
+          } else if (event.keyCode == 39) { // Right
+            this.moveShipRight();
+          } else if (event.keyCode == 32) { // space
+            this.pauseGame();
+          }
+        }, false);
       },
       meteors: {
         type: Array,
@@ -141,25 +185,13 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
         this.timeX = this.context.canvas.width - this.timeSize;
         this.timeY = 30;
         this.currentTime = 0;
-        this.velocity = 1;
+        this.velocity = 2;
         this.startTime = Math.round(window.performance.now() / 1000);
         this.meteors = [
-          [0, 0],
-          [this.context.canvas.width / 2, -130],
-          [this.context.canvas.width - 80, -250]
+          [this.getRandomInt(0, this.context.canvas.width - this.meteorSize), 0]
         ];
         this.drawSpaceShip();
         this.drawTime();
-        document.addEventListener('keydown', (event) => {
-          const keyName = event.key;
-          if (event.keyCode == 37) { // Left 
-            this.moveShipLeft();
-          } else if (event.keyCode == 39) { // Right
-            this.moveShipRight();
-          } else if (event.keyCode == 32) { // space
-            this.pauseGame();
-          }
-        }, false);
         this.requestNewFrame();
       },
       pauseGame: function() {
@@ -224,16 +256,15 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
             this.lostGame();
       },
       updateMeteors: function() {
-        let newMeteorSeconds = (5 - this.velocity) <= 0 ? 1 : (5 - this.velocity);
-        if (this.currentTime % newMeteorSeconds  == 0) {
-          let x = this.getRandomInt(0, this.context.canvas.width / 2 - this.meteorSize);
-          this.meteors.push([x, 0]);
-          let x1 = this.getRandomInt(x + this.meteorSize, this.context.canvas.width / 2 - this.meteorSize);
-          this.meteors.push([x1, -this.getRandomInt(250, 300)]);
-          let x2 = this.getRandomInt(x1 + this.meteorSize, this.context.canvas.width - this.meteorSize);
-          this.meteors.push([x2, 0]);
-          let x3 = this.getRandomInt(x2 + this.meteorSize, this.context.canvas.width - this.meteorSize);
-          this.meteors.push([x3, -this.getRandomInt(250, 300)]);
+        let x = this.getRandomInt(0, this.context.canvas.width - this.meteorSize);
+        this.meteors.push([x, 0]);
+        if (this.velocity >= 3) {
+          let x1;
+          if ((this.context.canvas.width - (x1 + this.meteorSize)) <= this.meteorSize * 2)
+            x1 = this.getRandomInt(0, x - this.meteorSize);
+          else
+            x1 = this.getRandomInt(x + this.meteorSize, this.context.canvas.width - this.meteorSize);
+          this.meteors.push([x1, 7]);
         }
         // Get rid of out of bounds meteors
         for (let i = this.meteors.length; i--; ) {
@@ -243,18 +274,18 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
             //console.log("meteor removed")
           }
         }
-        if (this.currentTime % 30 == 0)
+        if (this.currentTime % 20 == 0)
           this.velocity++;
       },
       moveShipLeft: function() {
-         if (this.shipX <= 10 && this.paused)
+         if (this.shipX <= 10 || this.paused)
             return;
          this.context.clearRect(this.shipX, this.shipY, this.shipSize, this.shipSize);
          this.shipX -= 10;
          this.drawSpaceShip();
       },
       moveShipRight: function() {
-        if (this.shipX + 10 >= this.context.canvas.width - this.shipSize && this.paused)
+        if (this.shipX + 10 >= this.context.canvas.width - this.shipSize || this.paused)
             return;
          this.context.clearRect(this.shipX, this.shipY, this.shipSize, this.shipSize);
          this.shipX += 10;
@@ -282,6 +313,16 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
       },
       getRandomInt: function(min, max) {
         return Math.floor(Math.random() * (max - min + 1)) + min;
+      },
+      toggleTouch: function(dockAttached) {
+        if (!dockAttached) {
+          this.$.left.classList.remove('hidden');
+          this.$.right.classList.remove('hidden');
+        } else {
+          this.$.left.classList.add('hidden');
+          this.$.right.classList.add('hidden');
+        }
+
       }
     });
   </script>
