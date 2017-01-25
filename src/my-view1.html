@@ -180,9 +180,37 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
             this.pauseGame();
           }
         }, false);
+        window.addEventListener('resize', this.resizeCanvas.bind(this), false);
+        window.addEventListener('webkitfullscreenchange', this.exitFullscreen.bind(this), false);
+        this.$.canvas.addEventListener('click', this.enterFullscreen.bind(this), false);
       },
       meteors: {
         type: Array,
+      },
+      enterFullscreen: function() {
+        if (document.webkitIsFullScreen)
+            return;
+        app._enterFullscreen();
+        this.context = this.$.canvas.getContext('2d');
+        this.$.card.webkitRequestFullscreen();
+        this.context.canvas.width  = window.outerWidth;
+        this.context.canvas.height = window.outerHeight;
+        this.timeX = this.context.canvas.width - this.timeSize;
+      },
+      exitFullscreen: function() {
+        if (!document.webkitIsFullScreen) {
+           app._exitFullscreen();
+           this.resizeCanvas();
+        }
+      },
+      resizeCanvas: function() {
+        this.context = this.$.canvas.getContext('2d');
+        let computedStyle = getComputedStyle(this.$.card);
+        this.context.canvas.width  = parseInt(computedStyle.width);
+        this.context.canvas.height = parseInt(computedStyle.height);
+        this.timeX = this.context.canvas.width - this.timeSize;
+        this.shipX = this.context.canvas.width / 2 - this.shipSize / 2;
+        this.shipY = this.context.canvas.height - this.shipSize;
       },
       startGame: function() {
         console.log('startGame')
@@ -194,7 +222,6 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
         this.$.lostDialog.close();
         this.context = this.$.canvas.getContext('2d');
         let computedStyle = getComputedStyle(this.$.card);
-        // FIXME : Handle resize here.
         this.context.canvas.width  = parseInt(computedStyle.width);
         this.context.canvas.height = parseInt(computedStyle.height);
         this.shipX = this.context.canvas.width / 2 - this.shipSize / 2;
