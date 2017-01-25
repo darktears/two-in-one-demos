@@ -84,6 +84,15 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
           <div class="flex"></div>
         </div>
       </paper-dialog>
+      <paper-dialog id="controlSelectDialog" no-cancel-on-outside-click no-cancel-on-esc-key>
+        <h2 id="controlSelectDialogTitle">You removed your keyboard, select a new control.</h2>
+        <div class="dialogButtons">
+          <div class="flex"></div>
+          <paper-button id="" raised on-tap="resumeGameWithTouch">Touch Controls</paper-button>
+          <paper-button id="" raised on-tap="resumeGameWithMotion">Motion Controls</paper-button>
+          <div class="flex"></div>
+        </div>
+      </paper-dialog>
       <img id="ship" src="../images/playerShip1_red.png" class="hidden"></img>
       <img id="explosion" src="../images/explosion5.png" class="hidden"></img>
       <img id="meteor" src="../images/meteorBrown_big4.png" class="hidden"></img>
@@ -132,6 +141,12 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
       context: {
         type: Object
       },
+      accelerometer: {
+        type: Object
+      },
+      dockReader: {
+        type: Object
+      },
       paused: {
         type: Boolean
       },
@@ -141,13 +156,18 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
         console.log('ready');
         this.$.dialog.fitInto = this.$.card;
         this.$.lostDialog.fitInto = this.$.card;
+        this.$.controlSelectDialog.fitInto = this.$.card;
         this.$.dialog.toggle();
+        this.paused = true;
+        if (typeof(Accelerometer) != 'undefined') {
+          this.accelerometer = new Accelerometer({frequency: 60});
+        }
         if (typeof(DetachableDock) != 'undefined') {
-          let sensor = new DetachableDock();
-          sensor.start();
-          sensor.onchange = function() {
+          this.dockReader = new DetachableDock();
+          this.dockReader.start();
+          this.dockReader.onchange = function() {
             console.log("Dock status changed");
-            this.toggleTouch(sensor.reading.attached);
+            this.toggleTouch(this.dockReader.reading.attached);
           }.bind(this);
         }
         document.addEventListener('keydown', (event) => {
@@ -195,9 +215,9 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
         this.requestNewFrame();
       },
       pauseGame: function() {
-        if (this.paused)
-          return;
         this.paused = true;
+        if (this.accelerometer.state != 'idle')
+          this.accelerometer.stop();
         this.$.dialog.toggle();
         this.$.playButton.classList.add('hidden');
         this.$.resumeButton.classList.remove('hidden');
@@ -212,6 +232,34 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
         this.$.resumeButton.classList.add('hidden');
         this.$.restartButton.classList.add('hidden');
         this.requestNewFrame();
+      },
+      resumeGameWithTouch: function() {
+        if (this.paused == false)
+          return;
+        if (this.accelerometer.state != 'idle')
+          this.accelerometer.stop();
+        this.$.controlSelectDialog.close();
+        this.$.left.classList.remove('hidden');
+        this.$.right.classList.remove('hidden');
+        this.resumeGame();
+      },
+      resumeGameWithMotion: function() {
+        if (this.paused == false)
+          return;
+        this.$.controlSelectDialog.close();
+        this.$.left.classList.add('hidden');
+        this.$.right.classList.add('hidden');
+        this.resumeGame();
+        this.accelerometer.start();
+        this.accelerometer.onchange = event => {
+            let newXPos = this.shipX + -this.accelerometer.reading.x * 3;
+            if (newXPos >= this.context.canvas.width - this.shipSize || this.paused || newXPos <= 10)
+                return;
+            this.context.clearRect(this.shipX, this.shipY, this.shipSize, this.shipSize);
+            this.shipX += -this.accelerometer.reading.x * 3;
+            this.drawSpaceShip();
+        }
+
       },
       lostGame: function() {
         if (this.paused == true)
@@ -315,14 +363,21 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
         return Math.floor(Math.random() * (max - min + 1)) + min;
       },
       toggleTouch: function(dockAttached) {
-        if (!dockAttached) {
-          this.$.left.classList.remove('hidden');
-          this.$.right.classList.remove('hidden');
-        } else {
+        console.log("toggleTouch" + this.paused)
+        if (this.paused && !this.$.controlSelectDialog.opened)
+          return;
+        this.docked = dockAttached;
+        if (!dockAttached)
+          this.$.controlSelectDialog.toggle();
+        else {
+          this.$.controlSelectDialog.close();
+          if (this.accelerometer.state != 'idle')
+            this.accelerometer.stop();
           this.$.left.classList.add('hidden');
           this.$.right.classList.add('hidden');
+          this.pauseGame();
         }
-
+        this.paused = true;
       }
     });
   </script>
